@@ -1,0 +1,83 @@
+[
+  {
+    "id": "APT-1789483366321",
+    "patient": {
+      "fullName": "sam",
+      "age": 45,
+      "sex": "Male",
+      "contactNumber": "7010472880",
+      "registeredAt": "2026-09-15T20:07:44.120Z"
+    },
+    "doctor": {
+      "name": "Dr. Sarah Mitchell, MD",
+      "role": "Attending Pulmonologist & Radiologist",
+      "department": "Thoracic Imaging & Respiratory Care",
+      "affiliation": "Metro Academic Medical Center",
+      "clinic": "Metro Pulmonary Care Center",
+      "address": "12 Health Sciences Avenue, Academic District",
+      "phone": "9786113795",
+      "whatsapp": "9786113795",
+      "avatar": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300",
+      "qualifications": "MBBS, MD (Radiodiagnosis), FCCP",
+      "license": "MD-92847-RAD (Prototype License)",
+      "status": "Available for Consultation",
+      "experience": "12+ Years Clinical Radiology Experience",
+      "isDemo": true
+    },
+    "consultationType": "online",
+    "date": "2026-02-14",
+    "time": "10:30",
+    "status": "approved",
+    "reason": "consultant",
+    "createdAt": "2026-09-15T20:12:46.321602",
+    "clinicName": "Metro Pulmonary Care Center",
+    "clinicAddress": "12 Health Sciences Avenue, Academic District",
+    "instructions": "Please arrive 10\u201315 minutes before your scheduled appointment."
+  },
+  {
+    "id": "APT-1789481383011",
+    "patient": {
+      "fullName": "Jane Smith",
+      "age": 28,
+      "sex": "Female",
+      "contactNumber": "9123456789"
+    },
+    "doctor": {
+      "name": "Dr. Sarah Mitchell, MD",
+      "phone": "9786113795"
+    },
+    "consultationType": "online",
+    "date": "2026-09-22",
+    "time": "15:15",
+    "status": "approved",
+    "reason": "Discuss scan results",
+    "createdAt": "2026-09-15T19:39:43.011586",
+    "clinicName": "Metro Medical Center",
+    "clinicAddress": "12 Health Sciences Avenue, Academic District",
+    "instructions": ""
+  },
+  {
+    "id": "APT-1789481383007",
+    "patient": {
+      "fullName": "John Doe",
+      "age": 45,
+      "sex": "Male",
+      "contactNumber": "9876543210"
+    },
+    "doctor": {
+      "name": "Dr. Sarah Mitchell, MD",
+      "clinic": "Metro Pulmonary Care Center",
+      "address": "12 Health Sciences Ave",
+      "phone": "9786113795"
+    },
+    "consultationType": "offline",
+    "date": "2026-09-20",
+    "time": "10:30",
+    "status": "approved",
+    "reason": "Routine Follow-up",
+    "createdAt": "2026-09-15T19:39:43.007837",
+    "clinicName": "Metro Pulmonary Care Center - Suite 300",
+    "clinicAddress": "12 Health Sciences Ave, East Wing",
+    "instructions": "Please arrive 15 minutes before appointment."
+  }
+]
