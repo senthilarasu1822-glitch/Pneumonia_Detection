@@ -7,7 +7,8 @@ from typing import Dict, Any, List
 
 import tensorflow as tf
 from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import letter
@@ -34,6 +35,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Serve built React frontend (production) ─────────────────────────────────
+FRONTEND_DIST = ROOT / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
 _model = None
 _model_error = None
@@ -142,7 +148,11 @@ class AppointmentApprove(BaseModel):
 # Endpoints
 # -------------------------------------------------------------
 @app.get("/")
-def health_check():
+def root():
+    """Serve the React SPA in production, or return health JSON in dev."""
+    index = FRONTEND_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
     return {
         "status": "ok",
         "app": "PneumoAI",
@@ -473,3 +483,17 @@ def generate_report(request: ReportRequest):
         )
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {error}") from error
+
+
+# -------------------------------------------------------------
+# SPA Catch-All — must be LAST so API routes take priority
+# Returns index.html for any unmatched path (React Router)
+# -------------------------------------------------------------
+from fastapi import Request
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(request: Request, full_path: str):
+    index = FRONTEND_DIST / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    raise HTTPException(status_code=404, detail="Not found")

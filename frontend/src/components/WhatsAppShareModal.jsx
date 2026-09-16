@@ -5,6 +5,22 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
+function normalizeNumber(raw) {
+  let number = String(raw || '').replace(/\D/g, '');
+  if (number.length === 10) number = '91' + number;
+  if (number.startsWith('0')) number = '91' + number.slice(1);
+  return number;
+}
+
+function openWhatsApp(raw, message, useWeb = true) {
+  const phone = normalizeNumber(raw);
+  const text = encodeURIComponent(message);
+  const url = useWeb
+    ? `https://web.whatsapp.com/send?phone=${phone}&text=${text}`
+    : `https://wa.me/${phone}?text=${text}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 export default function WhatsAppShareModal({
   isOpen,
   onClose,
@@ -19,16 +35,9 @@ export default function WhatsAppShareModal({
 
   if (!isOpen) return null;
 
-  // Clean and format phone numbers
-  const formatPhone = (num) => {
-    if (!num) return '';
-    const clean = num.replace(/[^0-9]/g, '');
-    return clean.length === 10 ? '91' + clean : clean;
-  };
-
-  const doctorPhone = formatPhone(doctor?.phone || '9786113795');
-  const patientPhone = formatPhone(patient?.contactNumber || '');
-  const customFormattedPhone = formatPhone(customPhone);
+  const doctorPhone = normalizeNumber(doctor?.phone || '9786113795');
+  const patientPhone = normalizeNumber(patient?.contactNumber || '');
+  const customFormattedPhone = normalizeNumber(customPhone);
 
   const activePhone = recipient === 'doctor' 
     ? doctorPhone 
@@ -36,133 +45,52 @@ export default function WhatsAppShareModal({
       ? patientPhone 
       : customFormattedPhone;
 
-  // Build appropriate message
+  // ─── Full rich message (clipboard only — too long for a URL) ────────────────
   let message = '';
   if (reportData) {
     if (recipient === 'doctor') {
-      message = `🏥 *PneumoAI — Patient Chest X-Ray Screening Report*
-
-Hello ${doctor?.name || 'Dr. Sarah Mitchell, MD'},
-
-I would like to share my AI-assisted chest X-ray screening analysis for medical review.
-
-👤 *Patient Details:*
-• Name: ${patient?.fullName || 'Not provided'}
-• Age / Sex: ${patient?.age || 'N/A'} yrs / ${patient?.sex || 'N/A'}
-• Contact: ${patient?.contactNumber || 'N/A'}
-
-🔬 *AI Screening Findings:*
-• Result: *${reportData.prediction}*
-• Confidence: *${reportData.confidence}%*
-• Architecture: DenseNet121 (Threshold: 0.65)
-• Analysis Date: ${reportData.analyzedAt ? new Date(reportData.analyzedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : new Date().toLocaleDateString()}
-
-*Notice:* This is an AI educational screening output. Please advise if an online video consultation or in-person clinic visit is recommended.
-
-Thank you,
-${patient?.fullName || 'Patient'}`;
+      message = `PneumoAI - Patient X-Ray Screening Report\n\nHello ${doctor?.name || 'Doctor'},\n\nPatient: ${patient?.fullName || 'N/A'} | Age: ${patient?.age || 'N/A'} | Sex: ${patient?.sex || 'N/A'}\nContact: ${patient?.contactNumber || 'N/A'}\n\nAI Result: ${reportData.prediction}\nConfidence: ${reportData.confidence}%\nModel: DenseNet121 (Threshold: 0.65)\nDate: ${reportData.analyzedAt ? new Date(reportData.analyzedAt).toLocaleDateString() : new Date().toLocaleDateString()}\n\nPlease advise on next steps.\n\nThank you,\n${patient?.fullName || 'Patient'}`;
     } else {
-      message = `🏥 *PneumoAI — Chest X-Ray Screening Report*
-
-Hello ${patient?.fullName || 'Patient'},
-
-Your PneumoAI chest radiograph analysis report is ready.
-
-🔬 *AI Result:* ${reportData.prediction}
-📊 *Confidence:* ${reportData.confidence}%
-⚙️ *Classification Threshold:* 0.65
-
-Please review your report and consult a healthcare professional for clinical evaluation.
-
-Thank you,
-PneumoAI`;
+      message = `PneumoAI - Your X-Ray Report is Ready\n\nHello ${patient?.fullName || 'Patient'},\n\nAI Result: ${reportData.prediction}\nConfidence: ${reportData.confidence}%\n\nPlease consult a healthcare professional for clinical evaluation.\n\n- PneumoAI`;
     }
   } else if (appointmentData) {
     if (recipient === 'doctor') {
       if (appointmentData.consultationType === 'online') {
-        message = `🏥 *Online Video Consultation — Patient Ready*
-
-Hello ${doctor?.name || 'Dr. Sarah Mitchell, MD'},
-
-I am ${patient?.fullName || 'the patient'}. I have joined our online video consultation room on PneumoAI for our scheduled appointment.
-
-📅 *Scheduled:* ${appointmentData.date} at ${appointmentData.time}
-👤 *Patient Name:* ${patient?.fullName || 'Patient'}
-📞 *Patient Contact:* ${patient?.contactNumber || 'N/A'}
-${reportData?.prediction ? `🔬 *AI Screening Result:* ${reportData.prediction} (${reportData.confidence}% confidence)` : ''}
-
-I am ready for our consultation call. Please join the video room or connect with me here on WhatsApp.
-
-Thank you,
-${patient?.fullName || 'Patient'}`;
+        message = `PneumoAI - I am ready for our video consultation.\n\nHello ${doctor?.name || 'Doctor'},\n\nPatient: ${patient?.fullName || 'Patient'}\nScheduled: ${appointmentData.date} at ${appointmentData.time}\n${reportData?.prediction ? `AI Screening: ${reportData.prediction} (${reportData.confidence}%)` : ''}\n\nPlease join the video room.\n\nThank you,\n${patient?.fullName || 'Patient'}`;
       } else {
-        message = `🏥 *Offline Clinic Consultation — Patient Confirmation*
-
-Hello ${doctor?.name || 'Dr. Sarah Mitchell, MD'},
-
-I am confirming my in-person clinic consultation appointment with you.
-
-📅 *Date:* ${appointmentData.date}
-🕐 *Time:* ${appointmentData.time}
-🏥 *Clinic:* ${appointmentData.clinicName || doctor?.clinic}
-📍 *Address:* ${appointmentData.clinicAddress || doctor?.address}
-👤 *Patient Name:* ${patient?.fullName || 'Patient'}
-📞 *Contact:* ${patient?.contactNumber || 'N/A'}
-
-Thank you,
-${patient?.fullName || 'Patient'}`;
+        message = `PneumoAI - Appointment Confirmation\n\nHello ${doctor?.name || 'Doctor'},\n\nI am confirming my in-person appointment.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nClinic: ${appointmentData.clinicName || doctor?.clinic || 'N/A'}\nPatient: ${patient?.fullName || 'Patient'}\n\nThank you,\n${patient?.fullName || 'Patient'}`;
       }
     } else {
       if (appointmentData.consultationType === 'offline') {
-        message = `🏥 *Offline Consultation Confirmed*
-
-Hello ${appointmentData.patient?.fullName || patient?.fullName},
-
-Your consultation appointment with ${doctor?.name} has been approved.
-
-📅 *Date:* ${appointmentData.date}
-🕐 *Time:* ${appointmentData.time}
-🏥 *Clinic:* ${appointmentData.clinicName || doctor?.clinic}
-📍 *Address:* ${appointmentData.clinicAddress || doctor?.address}
-📝 *Instructions:* ${appointmentData.instructions || 'Please arrive 10–15 minutes before your appointment.'}
-
-Thank you,
-PneumoAI`;
+        message = `PneumoAI - Consultation Approved\n\nHello ${appointmentData.patient?.fullName || patient?.fullName},\n\nYour appointment with ${doctor?.name} is confirmed.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nClinic: ${appointmentData.clinicName || doctor?.clinic || 'N/A'}\nAddress: ${appointmentData.clinicAddress || doctor?.address || 'N/A'}\n\nThank you,\nPneumoAI`;
       } else {
-        message = `🏥 *Online Consultation Confirmed*
-
-Hello ${appointmentData.patient?.fullName || patient?.fullName},
-
-Your online video consultation with ${doctor?.name} has been approved.
-
-📅 *Date:* ${appointmentData.date}
-🕐 *Time:* ${appointmentData.time}
-
-Your video consultation room will be available in the PneumoAI application at the scheduled time.
-
-Thank you,
-PneumoAI`;
+        message = `PneumoAI - Online Consultation Approved\n\nHello ${appointmentData.patient?.fullName || patient?.fullName},\n\nYour video consultation with ${doctor?.name} is confirmed.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\n\nThank you,\nPneumoAI`;
       }
     }
   }
 
-  // Universal WhatsApp URLs
-  const encodedText = encodeURIComponent(message);
-  
-  // WhatsApp Web (Direct in browser - best for PC/Laptop, bypasses missing desktop app)
-  const webUrl = activePhone
-    ? `https://web.whatsapp.com/send?phone=${activePhone}&text=${encodedText}`
-    : `https://web.whatsapp.com/send?text=${encodedText}`;
-
-  // WhatsApp Universal API (works on Mobile and launches Desktop app if installed)
-  const apiUrl = activePhone
-    ? `https://api.whatsapp.com/send?phone=${activePhone}&text=${encodedText}`
-    : `https://api.whatsapp.com/send?text=${encodedText}`;
-
-  // Short wa.me link
-  const waMeUrl = activePhone
-    ? `https://wa.me/${activePhone}?text=${encodedText}`
-    : `https://wa.me/?text=${encodedText}`;
+  // ─── Short URL-safe message (<250 chars, no emojis) for WhatsApp links ───────
+  // Emojis expand to ~12 chars each when URL-encoded; long URLs break WhatsApp.
+  let shortMsg = '';
+  if (reportData) {
+    if (recipient === 'doctor') {
+      shortMsg = `PneumoAI Report - Patient: ${patient?.fullName || 'N/A'}, Result: ${reportData.prediction}, Confidence: ${reportData.confidence}%. Please advise. - ${patient?.fullName || 'Patient'}`;
+    } else {
+      shortMsg = `PneumoAI: Your X-ray result is ready. Result: ${reportData.prediction}, Confidence: ${reportData.confidence}%. Consult a doctor for clinical evaluation.`;
+    }
+  } else if (appointmentData) {
+    if (recipient === 'doctor') {
+      shortMsg = appointmentData.consultationType === 'online'
+        ? `PneumoAI: I am ready for our video consultation on ${appointmentData.date} at ${appointmentData.time}. - ${patient?.fullName || 'Patient'}`
+        : `PneumoAI: Confirming appointment on ${appointmentData.date} at ${appointmentData.time} at ${appointmentData.clinicName || 'clinic'}. - ${patient?.fullName || 'Patient'}`;
+    } else {
+      shortMsg = appointmentData.consultationType === 'offline'
+        ? `PneumoAI: Your appointment with ${doctor?.name} is confirmed for ${appointmentData.date} at ${appointmentData.time}. Clinic: ${appointmentData.clinicName || 'N/A'}.`
+        : `PneumoAI: Your online consultation with ${doctor?.name} is confirmed for ${appointmentData.date} at ${appointmentData.time}.`;
+    }
+  }
+  // Trim to 300 chars max as a safety net
+  if (shortMsg.length > 300) shortMsg = shortMsg.slice(0, 297) + '...';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message);
@@ -170,7 +98,20 @@ PneumoAI`;
     setTimeout(() => setCopied(false), 2500);
   };
 
+  // Build URLs using the SHORT message so links actually work
+  const encodedShort = encodeURIComponent(shortMsg);
+  const waMeUrl = activePhone
+    ? `https://wa.me/${activePhone}?text=${encodedShort}`
+    : `https://wa.me/?text=${encodedShort}`;
+  const webUrl = activePhone
+    ? `https://web.whatsapp.com/send?phone=${activePhone}&text=${encodedShort}`
+    : `https://web.whatsapp.com/send?text=${encodedShort}`;
+  const apiUrl = activePhone
+    ? `https://api.whatsapp.com/send?phone=${activePhone}&text=${encodedShort}`
+    : `https://api.whatsapp.com/send?text=${encodedShort}`;
+
   return (
+
     <div
       style={{
         position: 'fixed',
@@ -347,14 +288,14 @@ PneumoAI`;
           </div>
         </div>
 
-        {/* Connection Options - Direct <a> tags so browser never blocks them */}
+        {/* Connection Options — window.open() used instead of <a target="_blank">
+          to avoid browser popup-blocker on modals */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          
-          {/* Primary: WhatsApp Web (Direct in browser, works on any PC without app installed) */}
-          <a
-            href={webUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+
+          {/* Primary: wa.me — most reliable on mobile & desktop */}
+          <button
+            type="button"
+            onClick={() => window.open(waMeUrl, '_blank', 'noopener,noreferrer')}
             className="btn"
             style={{
               backgroundColor: '#22c55e',
@@ -369,18 +310,17 @@ PneumoAI`;
               fontWeight: 700,
               borderRadius: 'var(--radius-md)',
               boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
-              textDecoration: 'none'
+              cursor: 'pointer'
             }}
           >
             <Globe size={18} />
-            <span>Open in WhatsApp Web (Browser)</span>
-          </a>
+            <span>Open WhatsApp (wa.me — Recommended)</span>
+          </button>
 
-          {/* Secondary: WhatsApp Mobile App / Universal API */}
-          <a
-            href={apiUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* Secondary: WhatsApp Web Browser */}
+          <button
+            type="button"
+            onClick={() => window.open(webUrl, '_blank', 'noopener,noreferrer')}
             className="btn btn-secondary"
             style={{
               display: 'flex',
@@ -388,13 +328,33 @@ PneumoAI`;
               justifyContent: 'center',
               gap: '0.6rem',
               padding: '0.75rem',
-              textDecoration: 'none',
-              fontWeight: 600
+              fontWeight: 600,
+              cursor: 'pointer'
             }}
           >
             <Smartphone size={16} />
-            <span>Open in WhatsApp App / Mobile</span>
-          </a>
+            <span>Open in WhatsApp Web (Browser)</span>
+          </button>
+
+          {/* Tertiary: Universal API (desktop app) */}
+          <button
+            type="button"
+            onClick={() => window.open(apiUrl, '_blank', 'noopener,noreferrer')}
+            className="btn btn-secondary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              padding: '0.75rem',
+              fontWeight: 600,
+              fontSize: '0.82rem',
+              cursor: 'pointer'
+            }}
+          >
+            <Smartphone size={14} />
+            <span>Open in WhatsApp Desktop App</span>
+          </button>
 
           {/* Copy button fallback */}
           <button
@@ -413,7 +373,7 @@ PneumoAI`;
         </div>
 
         <p style={{ margin: '1rem 0 0', fontSize: '0.73rem', color: '#64748b', textAlign: 'center', lineHeight: 1.45 }}>
-          💡 <strong>Tip for PC/Laptop:</strong> Click <strong>"Open in WhatsApp Web (Browser)"</strong> to chat immediately in Chrome or Edge without needing the WhatsApp Desktop app installed.
+          💡 <strong>How it works:</strong> The WhatsApp buttons open with a <strong>short summary message</strong> (to ensure the link works on all devices). Use <strong>"Copy Pre-Filled Text"</strong> to get the full detailed message and paste it manually in WhatsApp.
         </p>
       </div>
     </div>

@@ -55,7 +55,7 @@ export default function DoctorDashboard() {
     const message = isOffline
       ? `🏥 Offline Consultation Confirmed
 
-Hello ${apt.patient.fullName},
+Hello ${apt.patient?.fullName || 'Patient'},
 
 Your consultation appointment with ${doctor.name} has been approved.
 
@@ -68,7 +68,7 @@ ${apt.instructions || 'Please arrive 10–15 minutes before your appointment.'}
 
 Thank you,
 PneumoAI`
-      : `Hello ${apt.patient.fullName},
+      : `Hello ${apt.patient?.fullName || 'Patient'},
 
 Your online consultation with ${doctor.name} has been approved.
 
@@ -80,7 +80,7 @@ Your video consultation will be available in the PneumoAI application at the sch
 Thank you,
 PneumoAI`;
 
-    const clean = apt.patient.contactNumber ? apt.patient.contactNumber.replace(/[^0-9]/g, '') : '';
+    const clean = apt.patient?.contactNumber ? apt.patient.contactNumber.replace(/[^0-9]/g, '') : '';
     const phone = clean.length === 10 ? '91' + clean : clean;
     return `https://wa.me/${phone || ''}?text=${encodeURIComponent(message)}`;
   };
@@ -157,7 +157,7 @@ PneumoAI`;
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <h3 style={{ color: 'var(--navy-900)', fontSize: '1.2rem', margin: 0 }}>
-                      {apt.patient?.fullName}
+                      {apt.patient?.fullName || 'Unknown Patient'}
                     </h3>
                     <span className={`badge ${apt.consultationType === 'online' ? 'badge-cyan' : 'badge-neutral'}`}>
                       {apt.consultationType.toUpperCase()}

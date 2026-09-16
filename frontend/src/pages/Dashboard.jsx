@@ -103,7 +103,7 @@ export default function Dashboard() {
                 </span>
               </div>
               <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--navy-900)' }}>
-                {appointment.consultationType.toUpperCase()} Consultation with {appointment.doctor.name}
+                {appointment.consultationType.toUpperCase()} Consultation with {appointment.doctor?.name || doctor?.name}
               </div>
               <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                 Scheduled: {appointment.date} at {appointment.time}

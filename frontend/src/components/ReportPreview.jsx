@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { FileText, Download, ArrowLeft, ShieldAlert, Share2, ExternalLink } from 'lucide-react';
+import { FileText, Download, ArrowLeft, ShieldAlert, Share2, Copy, Check, MessageCircle } from 'lucide-react';
 import { downloadReportPdf } from '../services/reportService';
-import WhatsAppShareModal from './WhatsAppShareModal';
+import { buildWhatsAppReport } from '../utils/whatsappReport';
 
 export default function ReportPreview() {
   const { patient, xray, analysis, navigateTo, doctor } = useApp();
@@ -10,7 +10,7 @@ export default function ReportPreview() {
 
   const [reportError, setReportError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleDownload = async () => {
     setReportError('');
@@ -40,24 +40,23 @@ export default function ReportPreview() {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  // WhatsApp Pre-filled message (Section 19)
-  const whatsappMessage = `Hello ${patient.fullName},
+  // --- Direct WhatsApp report senders (no modal needed) ---
+  const handleSendToDoctor = () => {
+    const { waMeUrl } = buildWhatsAppReport(patient, analysis, doctor, 'doctor');
+    window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+  };
 
-Your PneumoAI X-ray analysis report is ready.
+  const handleSendToPatient = () => {
+    const { waMeUrl } = buildWhatsAppReport(patient, analysis, doctor, 'patient');
+    window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+  };
 
-Prediction: ${analysis.prediction}
-Confidence: ${analysis.confidence}%
-Classification Threshold: 0.65
-
-Please review the generated report and consult a qualified healthcare professional for medical evaluation.
-
-PneumoAI - Educational AI Demonstration.`;
-
-  // Format clean phone number if available
-  const cleanPhone = patient.contactNumber ? patient.contactNumber.replace(/[^0-9]/g, '') : '';
-  const whatsappUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone.length === 10 ? '91' + cleanPhone : cleanPhone}?text=${encodeURIComponent(whatsappMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+  const handleCopyReport = () => {
+    const { message } = buildWhatsAppReport(patient, analysis, doctor, 'doctor');
+    navigator.clipboard.writeText(message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   return (
     <>
@@ -72,12 +71,21 @@ PneumoAI - Educational AI Demonstration.`;
           </button>
           <button
             type="button"
-            onClick={() => setIsWhatsAppOpen(true)}
-            className="btn btn-secondary btn-sm"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #86efac', color: '#15803d', backgroundColor: '#f0fdf4', cursor: 'pointer' }}
-            title="Open WhatsApp Web or App to send screening report"
+            onClick={handleSendToDoctor}
+            className="btn btn-sm"
+            style={{ backgroundColor: '#22c55e', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
+            title="Send professional report to doctor via WhatsApp"
           >
-            <Share2 size={15} /> Send Report in WhatsApp
+            <MessageCircle size={15} /> Send to Doctor
+          </button>
+          <button
+            type="button"
+            onClick={handleSendToPatient}
+            className="btn btn-sm"
+            style={{ backgroundColor: '#16a34a', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
+            title="Send report to patient via WhatsApp"
+          >
+            <MessageCircle size={15} /> Send to Patient
           </button>
           <button onClick={() => navigateTo('consultation')} className="btn btn-primary btn-sm">
             <FileText size={15} /> Consult Doctor
@@ -249,38 +257,48 @@ PneumoAI - Educational AI Demonstration.`;
             </p>
           </section>
 
-          {/* 5. WhatsApp Sharing Info */}
-          <div style={{ padding: '1rem', backgroundColor: '#f0fdf4', borderRadius: 'var(--radius-md)', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.88rem' }}>Share Report Summary via WhatsApp</div>
-              <div style={{ fontSize: '0.78rem', color: '#15803d' }}>
-                Open WhatsApp Web or mobile app with pre-filled analysis summary for Dr. Sarah Mitchell or patient
-              </div>
+          {/* 5. WhatsApp Report Share */}
+          <div style={{ padding: '1.25rem', backgroundColor: '#f0fdf4', borderRadius: 'var(--radius-md)', border: '1px solid #bbf7d0' }}>
+            <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.9rem', marginBottom: '0.35rem' }}>
+              Share Professional Report via WhatsApp
             </div>
-            <button
-              type="button"
-              onClick={() => setIsWhatsAppOpen(true)}
-              className="btn btn-sm"
-              style={{ backgroundColor: '#22c55e', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
-            >
-              <ExternalLink size={14} /> Send Report in WhatsApp
-            </button>
+            <div style={{ fontSize: '0.78rem', color: '#15803d', marginBottom: '1rem' }}>
+              Sends a formatted medical report with patient info, AI result, model metrics and disclaimer — directly to WhatsApp.
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleSendToDoctor}
+                className="btn btn-sm"
+                style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,197,94,0.3)' }}
+              >
+                <MessageCircle size={14} /> Send to Doctor (WhatsApp)
+              </button>
+              <button
+                type="button"
+                onClick={handleSendToPatient}
+                className="btn btn-sm"
+                style={{ backgroundColor: '#15803d', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
+              >
+                <MessageCircle size={14} /> Send to Patient (WhatsApp)
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyReport}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}
+              >
+                {copied ? <Check size={14} style={{ color: '#16a34a' }} /> : <Copy size={14} />}
+                {copied ? 'Copied!' : 'Copy Report Text'}
+              </button>
+            </div>
+            <div style={{ marginTop: '0.65rem', fontSize: '0.72rem', color: '#64748b' }}>
+              * Opens WhatsApp with a professional formatted report including patient details, AI result, DenseNet121 model metrics and medical disclaimer.
+            </div>
           </div>
 
         </div>
       </div>
-
-      {/* Interactive WhatsApp Connection Modal */}
-      <WhatsAppShareModal
-        isOpen={isWhatsAppOpen}
-        onClose={() => setIsWhatsAppOpen(false)}
-        defaultRecipient="doctor"
-        reportData={{
-          prediction: analysis.prediction,
-          confidence: analysis.confidence,
-          analyzedAt: analysis.analyzedAt
-        }}
-      />
     </>
   );
 }

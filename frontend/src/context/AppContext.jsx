@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   getAppointmentsApi,
   createAppointmentApi,
@@ -55,6 +55,10 @@ export function AppProvider({ children }) {
     }
   });
 
+  // Ref to avoid stale closure in refreshAppointments without adding to deps
+  const appointmentRef = useRef(appointment);
+  useEffect(() => { appointmentRef.current = appointment; }, [appointment]);
+
   // 5. Screening History
   const [history, setHistory] = useState(() => {
     try {
@@ -71,20 +75,23 @@ export function AppProvider({ children }) {
   const [activeRole, setActiveRole] = useState('patient'); // 'patient' or 'doctor'
 
   // Fetch appointments from backend on load
+  // Uses appointmentRef (not appointment state) to avoid an infinite loop:
+  // appointment state -> useCallback recreated -> useEffect reruns -> setAppointment -> repeat
   const refreshAppointments = useCallback(async () => {
     const data = await getAppointmentsApi();
     if (data && Array.isArray(data)) {
       setAppointments(data);
       // Sync active appointment if exists
-      if (appointment) {
-        const found = data.find(a => a.id === appointment.id);
+      const currentAppointment = appointmentRef.current;
+      if (currentAppointment) {
+        const found = data.find(a => a.id === currentAppointment.id);
         if (found) {
           setAppointment(found);
           sessionStorage.setItem('pneumoai_appointment', JSON.stringify(found));
         }
       }
     }
-  }, [appointment]);
+  }, []); // stable — reads appointment via ref, not state
 
   useEffect(() => {
     refreshAppointments();
