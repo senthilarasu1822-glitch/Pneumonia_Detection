@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import Logo from '../components/Logo';
 import StepIndicator from '../components/StepIndicator';
-import Disclaimer from '../components/Disclaimer';
 import { Shield, Cpu, FileText, Activity, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
 
 const INITIAL_FORM = { fullName: '', age: '', sex: '', contactNumber: '' };
@@ -47,14 +46,12 @@ export default function PatientInfo() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Disclaimer compact />
-
       <div 
         style={{
           flex: 1,
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
-          minHeight: 'calc(100vh - 40px)'
+          minHeight: '100vh'
         }}
         className="patient-info-grid"
       >
@@ -114,14 +111,6 @@ export default function PatientInfo() {
               <Lock size={16} style={{ color: '#38bdf8', flexShrink: 0 }} />
               <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
                 Patient data is stored locally in session only. No data is transmitted externally without backend connection.
-              </span>
-            </div>
-
-            {/* Prototype Badge */}
-            <div style={{ marginTop: '1.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.85rem', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 'var(--radius-full)' }}>
-              <Shield size={14} style={{ color: '#f59e0b' }} />
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Educational AI Prototype
               </span>
             </div>
           </div>
@@ -234,9 +223,9 @@ export default function PatientInfo() {
               </button>
             </form>
 
-            {/* Disclaimer */}
+            {/* Privacy Notice */}
             <div style={{ marginTop: '1.25rem', padding: '0.85rem 1rem', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: '#0369a1', lineHeight: 1.55 }}>
-              <strong>Privacy Notice:</strong> Patient information is used only for the analysis workflow and report generation within this session. This is an educational AI prototype and is not a medical diagnostic system.
+              <strong>Privacy Notice:</strong> Patient information is stored securely in your session and used only for the analysis workflow and report generation.
             </div>
           </div>
         </div>

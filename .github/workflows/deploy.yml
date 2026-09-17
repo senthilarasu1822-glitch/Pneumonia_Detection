@@ -1,0 +1,71 @@
+name: 🚀 Deploy to inblitz.cloud
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # allow manual trigger
+
+jobs:
+  deploy:
+    name: Build & Deploy Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -t pneumoai:latest \
+            .
+
+      - name: Save Docker image as tar
+        run: docker save pneumoai:latest | gzip > pneumoai.tar.gz
+
+      - name: Upload image to server via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: pneumoai.tar.gz
+          target: ~/
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "📦 Loading new Docker image..."
+            docker load < ~/pneumoai.tar.gz
+
+            echo "🔄 Stopping old container..."
+            docker stop pneumoai 2>/dev/null || true
+            docker rm pneumoai 2>/dev/null || true
+
+            echo "🚀 Starting new container on port 8080..."
+            docker run -d \
+              --name pneumoai \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -v ~/appointments.json:/app/appointments.json \
+              pneumoai:latest
+
+            echo "⏳ Waiting for health check..."
+            sleep 15
+            curl -sf http://localhost:8080/ || exit 1
+
+            echo "✅ Deployed successfully to inblitz.cloud!"
+
+            # Cleanup old images
+            docker image prune -f
+            rm -f ~/pneumoai.tar.gz

@@ -2,11 +2,13 @@ from pathlib import Path
 import base64
 import io
 import json
+import re
+import uuid
 from datetime import datetime
 from typing import Dict, Any, List
 
 import tensorflow as tf
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,10 +25,12 @@ from gradcam import predict_with_gradcam, THRESHOLD
 
 ROOT = Path(__file__).resolve().parent
 MODEL_PATH = ROOT / "model" / "pneumonia_densenet121.keras"
-APPOINTMENTS_FILE = ROOT / "appointments.json"
-ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png"}
+ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/octet-stream"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+REPORTS_DIR = ROOT / "static" / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="PneumoAI API", description="Pneumonia Detection & Clinical Consultation Platform")
+app = FastAPI(title="PneumoAI API", description="AI-Assisted Pneumonia Detection & Screening Platform")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +38,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ─── Serve built React frontend (production) ─────────────────────────────────
@@ -58,90 +63,12 @@ def get_model():
 
 
 # -------------------------------------------------------------
-# Appointment Persistence & State
-# -------------------------------------------------------------
-def load_appointments() -> List[Dict[str, Any]]:
-    if not APPOINTMENTS_FILE.exists():
-        return []
-    try:
-        with open(APPOINTMENTS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def save_appointments(appointments: List[Dict[str, Any]]):
-    try:
-        with open(APPOINTMENTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(appointments, f, indent=2)
-    except Exception as e:
-        print(f"Error saving appointments: {e}")
-
-
-# -------------------------------------------------------------
-# WebSocket Video Signaling Manager
-# -------------------------------------------------------------
-class VideoConnectionManager:
-    def __init__(self):
-        # rooms: {appointment_id: {role: WebSocket}}
-        self.rooms: Dict[str, Dict[str, WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, appointment_id: str, role: str):
-        await websocket.accept()
-        if appointment_id not in self.rooms:
-            self.rooms[appointment_id] = {}
-        self.rooms[appointment_id][role] = websocket
-        # Notify room peers that someone connected
-        await self.broadcast_to_peer(appointment_id, role, {
-            "type": "peer_joined",
-            "role": role,
-            "appointment_id": appointment_id
-        })
-
-    def disconnect(self, appointment_id: str, role: str):
-        if appointment_id in self.rooms:
-            if role in self.rooms[appointment_id]:
-                del self.rooms[appointment_id][role]
-            if not self.rooms[appointment_id]:
-                del self.rooms[appointment_id]
-
-    async def broadcast_to_peer(self, appointment_id: str, sender_role: str, message: dict):
-        if appointment_id in self.rooms:
-            for peer_role, ws in list(self.rooms[appointment_id].items()):
-                if peer_role != sender_role:
-                    try:
-                        await ws.send_json(message)
-                    except Exception:
-                        pass
-
-
-video_manager = VideoConnectionManager()
-
-
-# -------------------------------------------------------------
 # Models & Schemas
 # -------------------------------------------------------------
 class ReportRequest(BaseModel):
     patient: dict
     analysis: dict
     originalImage: str | None = None
-
-
-class AppointmentCreate(BaseModel):
-    patient: dict
-    doctor: dict
-    consultationType: str  # "online" or "offline"
-    date: str
-    time: str
-    reason: str = ""
-
-
-class AppointmentApprove(BaseModel):
-    date: str
-    time: str
-    clinicName: str | None = None
-    clinicAddress: str | None = None
-    instructions: str | None = None
 
 
 # -------------------------------------------------------------
@@ -164,15 +91,25 @@ def root():
 
 @app.get("/health")
 def health():
-    """Lightweight health check used by Docker HEALTHCHECK and monitoring."""
-    return {"status": "ok", "app": "PneumoAI"}
+    """Health check endpoint returning system status and model parameters."""
+    return {
+        "status": "ok",
+        "app": "PneumoAI",
+        "model": "DenseNet121",
+        "threshold": THRESHOLD,
+        "model_path": str(MODEL_PATH)
+    }
+
+
+health_check = health
 
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="An X-ray image file is required")
-    if file.content_type not in ALLOWED_TYPES:
+    ext = Path(file.filename or "").suffix.lower()
+    if (file.content_type not in ALLOWED_TYPES) and (ext not in ALLOWED_EXTENSIONS):
         raise HTTPException(status_code=415, detail="Only JPG, JPEG, and PNG images are supported")
 
     image_bytes = await file.read()
@@ -209,105 +146,7 @@ async def predict(file: UploadFile = File(...)):
     }
 
 
-# -------------------------------------------------------------
-# Appointments Endpoints
-# -------------------------------------------------------------
-@app.get("/appointments")
-def list_appointments():
-    return load_appointments()
 
-
-@app.post("/appointments")
-def create_appointment(data: AppointmentCreate):
-    appointments = load_appointments()
-    appointment_id = f"APT-{int(datetime.utcnow().timestamp() * 1000)}"
-    new_apt = {
-        "id": appointment_id,
-        "patient": data.patient,
-        "doctor": data.doctor,
-        "consultationType": data.consultationType.lower(),
-        "date": data.date,
-        "time": data.time,
-        "status": "pending",
-        "reason": data.reason,
-        "createdAt": datetime.utcnow().isoformat(),
-        "clinicName": data.doctor.get("clinic", "Metro Medical Center"),
-        "clinicAddress": data.doctor.get("address", "12 Health Sciences Avenue, Academic District"),
-        "instructions": "Please arrive 10-15 minutes prior to scheduled appointment." if data.consultationType.lower() == "offline" else ""
-    }
-    appointments.insert(0, new_apt)
-    save_appointments(appointments)
-    return new_apt
-
-
-@app.get("/appointments/{appointment_id}")
-def get_appointment(appointment_id: str):
-    appointments = load_appointments()
-    for apt in appointments:
-        if apt["id"] == appointment_id:
-            return apt
-    raise HTTPException(status_code=404, detail="Appointment not found")
-
-
-@app.post("/appointments/{appointment_id}/approve")
-def approve_appointment(appointment_id: str, data: AppointmentApprove):
-    appointments = load_appointments()
-    for apt in appointments:
-        if apt["id"] == appointment_id:
-            apt["status"] = "approved"
-            apt["date"] = data.date
-            apt["time"] = data.time
-            if data.clinicName:
-                apt["clinicName"] = data.clinicName
-            if data.clinicAddress:
-                apt["clinicAddress"] = data.clinicAddress
-            if data.instructions:
-                apt["instructions"] = data.instructions
-            save_appointments(appointments)
-            return apt
-    raise HTTPException(status_code=404, detail="Appointment not found")
-
-
-@app.post("/appointments/{appointment_id}/reject")
-def reject_appointment(appointment_id: str):
-    appointments = load_appointments()
-    for apt in appointments:
-        if apt["id"] == appointment_id:
-            apt["status"] = "rejected"
-            save_appointments(appointments)
-            return apt
-    raise HTTPException(status_code=404, detail="Appointment not found")
-
-
-# -------------------------------------------------------------
-# WebSocket Video Consultation Signaling
-# -------------------------------------------------------------
-@app.websocket("/ws/video/{appointment_id}/{role}")
-async def video_signaling(websocket: WebSocket, appointment_id: str, role: str):
-    # Verify appointment exists and is approved online consultation
-    appointments = load_appointments()
-    apt = next((a for a in appointments if a["id"] == appointment_id), None)
-    
-    # Allow connection if appointment exists and is approved online
-    if apt and (apt["status"] != "approved" or apt["consultationType"] != "online"):
-        await websocket.close(code=4003, reason="Appointment not authorized for online consultation")
-        return
-
-    await video_manager.connect(websocket, appointment_id, role)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            # Forward signaling payload to peer
-            await video_manager.broadcast_to_peer(appointment_id, role, data)
-    except WebSocketDisconnect:
-        video_manager.disconnect(appointment_id, role)
-        await video_manager.broadcast_to_peer(appointment_id, role, {
-            "type": "peer_left",
-            "role": role,
-            "appointment_id": appointment_id
-        })
-    except Exception as e:
-        video_manager.disconnect(appointment_id, role)
 
 
 # -------------------------------------------------------------
@@ -373,7 +212,7 @@ def generate_report(request: ReportRequest):
         story = [
             Paragraph("<b>PNEUMOAI</b>", header_title_style),
             Paragraph("AI-ASSISTED CHEST X-RAY ANALYSIS REPORT", subtitle_style),
-            Paragraph("Educational Demonstration System • DenseNet121 Architecture", body_regular),
+            Paragraph("DenseNet121 Deep Learning Architecture • Chest Radiograph Screening", body_regular),
             Spacer(1, 10),
             Paragraph("<b>Patient Information</b>", section_heading),
         ]
@@ -420,7 +259,7 @@ def generate_report(request: ReportRequest):
         story.append(Spacer(1, 10))
 
         story.append(Paragraph("<b>Radiographic Image Analysis & AI Attention</b>", section_heading))
-        story.append(Paragraph("Grad-CAM highlights image regions that influenced the model prediction. It is not an exact lesion or disease localization method.", body_regular))
+        story.append(Paragraph("Grad-CAM neural activation maps highlight anatomical regions influencing the deep learning prediction.", body_regular))
         story.append(Spacer(1, 6))
 
         image_cells = []
@@ -472,23 +311,42 @@ def generate_report(request: ReportRequest):
         ]))
         story.append(perf_table)
         story.append(Paragraph("<i>Note: The above metrics represent independent model evaluation performance on the test benchmark, not individual patient confidence.</i>", disclaimer_style))
-        story.append(Spacer(1, 10))
-
-        story.append(Paragraph("<b>Medical Disclaimer</b>", section_heading))
-        story.append(Paragraph(
-            "This application is an educational AI demonstration and is not a clinically validated diagnostic system. "
-            "AI predictions and visual attention heatmaps should not be used as a substitute for evaluation by a qualified healthcare professional.",
-            disclaimer_style
-        ))
-
         document.build(story)
+        pdf_bytes = buffer.getvalue()
+
+        # Save a persistent document copy for WhatsApp sharing & direct link access
+        raw_name = patient.get("fullName", "patient")
+        safe_name = re.sub(r'[^a-zA-Z0-9]+', '-', str(raw_name)).strip('-').lower() or "patient"
+        doc_id = uuid.uuid4().hex[:8]
+        report_filename = f"pneumoai-report-{safe_name}-{doc_id}.pdf"
+        report_path = REPORTS_DIR / report_filename
+        report_path.write_bytes(pdf_bytes)
+
         return Response(
-            content=buffer.getvalue(),
+            content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=pneumoai-report.pdf"}
+            headers={
+                "Content-Disposition": f"attachment; filename={report_filename}",
+                "X-Report-Filename": report_filename,
+                "X-Report-Url": f"/reports/{report_filename}",
+                "Access-Control-Expose-Headers": "Content-Disposition, X-Report-Filename, X-Report-Url"
+            }
         )
     except Exception as error:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {error}") from error
+
+
+@app.get("/reports/{filename}")
+def get_report_file(filename: str):
+    """Serve persistent generated PDF reports for direct WhatsApp & document sharing."""
+    file_path = (REPORTS_DIR / filename).resolve()
+    if not str(file_path).startswith(str(REPORTS_DIR.resolve())) or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Report document not found")
+    return FileResponse(
+        str(file_path),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
 
 
 # -------------------------------------------------------------

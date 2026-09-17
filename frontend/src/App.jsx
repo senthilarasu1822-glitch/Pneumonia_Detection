@@ -11,9 +11,6 @@ import PatientInfo from './pages/PatientInfo';
 import Dashboard from './pages/Dashboard';
 import UploadPage from './pages/UploadPage';
 import DetailedResult from './pages/DetailedResult';
-import ConsultationPage from './pages/ConsultationPage';
-import VideoCallPage from './pages/VideoCallPage';
-import DoctorDashboard from './pages/DoctorDashboard';
 
 // Report view
 import ReportPreview from './components/ReportPreview';
@@ -42,9 +39,6 @@ function AppRouter() {
           {activePage === 'analyzing'        && <UploadPage analyzing />}
           {activePage === 'detailed'         && <DetailedResult />}
           {activePage === 'report'           && <ReportPreview />}
-          {activePage === 'consultation'     && <ConsultationPage />}
-          {activePage === 'videocall'        && <VideoCallPage />}
-          {activePage === 'doctor-dashboard' && <DoctorDashboard />}
         </div>
       </main>
     </div>

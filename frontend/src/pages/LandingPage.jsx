@@ -1,10 +1,9 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import Logo from '../components/Logo';
-import Disclaimer from '../components/Disclaimer';
 import {
   Cpu, Activity, Layers, FileText, ArrowRight, ShieldCheck,
-  Stethoscope, Eye, CheckCircle2, ChevronRight, Sparkles
+  Eye, CheckCircle2, ChevronRight, Sparkles
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -37,14 +36,12 @@ export default function LandingPage() {
     {
       icon: FileText,
       title: 'Clinical-Grade PDF & WhatsApp',
-      desc: 'Automated reporting with multi-spectral heatmaps and doctor appointment coordination.'
+      desc: 'Automated reporting with multi-spectral heatmaps and clinical report export.'
     }
   ];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#090d16', color: '#f8fafc' }}>
-      <Disclaimer compact />
-
       {/* Modern Medical Header */}
       <header
         style={{
@@ -76,19 +73,6 @@ export default function LandingPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button
-            onClick={() => navigateTo('doctor-dashboard')}
-            className="btn btn-sm"
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#94a3b8'
-            }}
-          >
-            <Stethoscope size={15} />
-            <span>Doctor Portal</span>
-          </button>
-
           <button
             onClick={handleStartScreening}
             className="btn btn-accent btn-sm"
@@ -148,7 +132,7 @@ export default function LandingPage() {
             }}
           >
             Upload a chest X-ray and receive an AI-generated prediction with visual attention analysis.
-            Interpreted through real-time Grad-CAM neural attention overlays, verified test benchmark metrics, and seamless physician consultation.
+            Interpreted through real-time Grad-CAM neural attention overlays, localized opacity spread mapping, and verified test benchmark metrics.
           </p>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '3.5rem' }}>
@@ -211,9 +195,9 @@ export default function LandingPage() {
             </div>
 
             <div style={{ textAlign: 'left', padding: '0.5rem', borderLeft: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Consultation</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a855f7', marginTop: '0.2rem' }}>Online / Offline</div>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>WebRTC video & clinic visit</div>
+              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: '#64748b', fontWeight: 700 }}>Report Export</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#a855f7', marginTop: '0.2rem' }}>PDF & WhatsApp</div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Comprehensive diagnostic summary</div>
             </div>
           </div>
         </div>

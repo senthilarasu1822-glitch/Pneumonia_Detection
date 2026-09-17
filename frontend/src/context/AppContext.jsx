@@ -1,29 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import {
-  getAppointmentsApi,
-  createAppointmentApi,
-  approveAppointmentApi,
-  rejectAppointmentApi
-} from '../services/api';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AppContext = createContext(null);
-
-export const DEMO_DOCTOR = {
-  name: 'Dr. Sarah Mitchell, MD',
-  role: 'Attending Pulmonologist & Radiologist',
-  department: 'Thoracic Imaging & Respiratory Care',
-  affiliation: 'Metro Academic Medical Center',
-  clinic: 'Metro Pulmonary Care Center',
-  address: '12 Health Sciences Avenue, Academic District',
-  phone: '9786113795',
-  whatsapp: '9786113795',
-  avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
-  qualifications: 'MBBS, MD (Radiodiagnosis), FCCP',
-  license: 'MD-92847-RAD (Prototype License)',
-  status: 'Available for Consultation',
-  experience: '12+ Years Clinical Radiology Experience',
-  isDemo: true
-};
 
 export function AppProvider({ children }) {
   // 1. Patient State
@@ -42,24 +19,7 @@ export function AppProvider({ children }) {
   // 3. Current Analysis Result
   const [analysis, setAnalysis] = useState(null);
 
-  // 4. Appointments State (array of all appointments for doctor & patient)
-  const [appointments, setAppointments] = useState([]);
-  
-  // Current patient's active appointment
-  const [appointment, setAppointment] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('pneumoai_appointment');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  // Ref to avoid stale closure in refreshAppointments without adding to deps
-  const appointmentRef = useRef(appointment);
-  useEffect(() => { appointmentRef.current = appointment; }, [appointment]);
-
-  // 5. Screening History
+  // 4. Screening History
   const [history, setHistory] = useState(() => {
     try {
       const saved = sessionStorage.getItem('pneumoai_history');
@@ -69,36 +29,9 @@ export function AppProvider({ children }) {
     }
   });
 
-  // 6. Active View / Navigation
-  // 'landing' -> 'patient-info' -> 'dashboard' -> 'upload' -> 'analyzing' -> 'detailed' -> 'report' -> 'consultation' -> 'videocall' -> 'doctor-dashboard'
+  // 5. Active View / Navigation
+  // 'landing' -> 'patient-info' -> 'dashboard' -> 'upload' -> 'analyzing' -> 'detailed' -> 'report'
   const [activePage, setActivePage] = useState('landing');
-  const [activeRole, setActiveRole] = useState('patient'); // 'patient' or 'doctor'
-
-  // Fetch appointments from backend on load
-  // Uses appointmentRef (not appointment state) to avoid an infinite loop:
-  // appointment state -> useCallback recreated -> useEffect reruns -> setAppointment -> repeat
-  const refreshAppointments = useCallback(async () => {
-    const data = await getAppointmentsApi();
-    if (data && Array.isArray(data)) {
-      setAppointments(data);
-      // Sync active appointment if exists
-      const currentAppointment = appointmentRef.current;
-      if (currentAppointment) {
-        const found = data.find(a => a.id === currentAppointment.id);
-        if (found) {
-          setAppointment(found);
-          sessionStorage.setItem('pneumoai_appointment', JSON.stringify(found));
-        }
-      }
-    }
-  }, []); // stable — reads appointment via ref, not state
-
-  useEffect(() => {
-    refreshAppointments();
-    // Poll periodically so patient receives doctor approval updates automatically
-    const interval = setInterval(refreshAppointments, 4000);
-    return () => clearInterval(interval);
-  }, [refreshAppointments]);
 
   // Persist patient to session storage
   useEffect(() => {
@@ -121,15 +54,6 @@ export function AppProvider({ children }) {
       console.error(e);
     }
   }, [history]);
-
-  useEffect(() => {
-    try {
-      if (appointment) sessionStorage.setItem('pneumoai_appointment', JSON.stringify(appointment));
-      else sessionStorage.removeItem('pneumoai_appointment');
-    } catch (e) {
-      console.error(e);
-    }
-  }, [appointment]);
 
   // Navigation helper
   const navigateTo = (page) => {
@@ -159,10 +83,8 @@ export function AppProvider({ children }) {
     setPatient(null);
     setXray(null);
     setAnalysis(null);
-    setAppointment(null);
     setActivePage('landing');
     sessionStorage.removeItem('pneumoai_patient');
-    sessionStorage.removeItem('pneumoai_appointment');
   };
 
   // Helper to load demo sample image (Normal or Pneumonia)
@@ -230,61 +152,6 @@ export function AppProvider({ children }) {
     ]);
   };
 
-  // Patient requests an appointment
-  const requestAppointment = async ({ consultationType, date, time, reason }) => {
-    const payload = {
-      patient: { ...patient },
-      doctor: { ...DEMO_DOCTOR },
-      consultationType,
-      date,
-      time,
-      reason: reason || ''
-    };
-
-    const created = await createAppointmentApi(payload);
-    const newApt = created || {
-      id: `APT-${Date.now()}`,
-      ...payload,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      clinicName: DEMO_DOCTOR.clinic,
-      clinicAddress: DEMO_DOCTOR.address,
-      instructions: consultationType === 'offline' ? 'Please arrive 10-15 minutes prior to appointment.' : ''
-    };
-
-    setAppointment(newApt);
-    setAppointments(prev => [newApt, ...prev.filter(a => a.id !== newApt.id)]);
-    return newApt;
-  };
-
-  // Doctor approves appointment
-  const approveAppointment = async (appointmentId, approvalData) => {
-    const res = await approveAppointmentApi(appointmentId, approvalData);
-    setAppointments(prev => prev.map(a => {
-      if (a.id === appointmentId) {
-        return res || { ...a, status: 'approved', ...approvalData };
-      }
-      return a;
-    }));
-    if (appointment?.id === appointmentId) {
-      setAppointment(prev => ({ ...prev, status: 'approved', ...approvalData }));
-    }
-  };
-
-  // Doctor rejects appointment
-  const rejectAppointment = async (appointmentId) => {
-    const res = await rejectAppointmentApi(appointmentId);
-    setAppointments(prev => prev.map(a => {
-      if (a.id === appointmentId) {
-        return res || { ...a, status: 'rejected' };
-      }
-      return a;
-    }));
-    if (appointment?.id === appointmentId) {
-      setAppointment(prev => ({ ...prev, status: 'rejected' }));
-    }
-  };
-
   return (
     <AppContext.Provider
       value={{
@@ -298,18 +165,8 @@ export function AppProvider({ children }) {
         setAnalysis,
         recordAnalysisResult,
         history,
-        appointment,
-        setAppointment,
-        appointments,
-        refreshAppointments,
-        requestAppointment,
-        approveAppointment,
-        rejectAppointment,
         activePage,
-        navigateTo,
-        activeRole,
-        setActiveRole,
-        doctor: DEMO_DOCTOR
+        navigateTo
       }}
     >
       {children}

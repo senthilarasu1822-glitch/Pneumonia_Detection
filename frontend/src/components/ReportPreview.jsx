@@ -1,16 +1,19 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { FileText, Download, ArrowLeft, ShieldAlert, Share2, Copy, Check, MessageCircle } from 'lucide-react';
+import { FileText, Download, ArrowLeft, Share2, Copy, Check, MessageCircle } from 'lucide-react';
 import { downloadReportPdf } from '../services/reportService';
 import { buildWhatsAppReport } from '../utils/whatsappReport';
+import WhatsAppShareModal from './WhatsAppShareModal';
 
 export default function ReportPreview() {
-  const { patient, xray, analysis, navigateTo, doctor } = useApp();
+  const { patient, xray, analysis, navigateTo } = useApp();
   const reportRef = useRef(null);
 
   const [reportError, setReportError] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareRecipient, setShareRecipient] = useState('patient');
 
   const handleDownload = async () => {
     setReportError('');
@@ -40,19 +43,19 @@ export default function ReportPreview() {
     year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 
-  // --- Direct WhatsApp report senders (no modal needed) ---
-  const handleSendToDoctor = () => {
-    const { waMeUrl } = buildWhatsAppReport(patient, analysis, doctor, 'doctor');
-    window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+  // --- Direct WhatsApp report senders ---
+  const handleShareWhatsApp = () => {
+    setShareRecipient('custom');
+    setShareModalOpen(true);
   };
 
   const handleSendToPatient = () => {
-    const { waMeUrl } = buildWhatsAppReport(patient, analysis, doctor, 'patient');
-    window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+    setShareRecipient('patient');
+    setShareModalOpen(true);
   };
 
   const handleCopyReport = () => {
-    const { message } = buildWhatsAppReport(patient, analysis, doctor, 'doctor');
+    const { message } = buildWhatsAppReport(patient, analysis, 'general');
     navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -71,12 +74,12 @@ export default function ReportPreview() {
           </button>
           <button
             type="button"
-            onClick={handleSendToDoctor}
+            onClick={handleShareWhatsApp}
             className="btn btn-sm"
             style={{ backgroundColor: '#22c55e', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
-            title="Send professional report to doctor via WhatsApp"
+            title="Share report via WhatsApp"
           >
-            <MessageCircle size={15} /> Send to Doctor
+            <MessageCircle size={15} /> Share via WhatsApp
           </button>
           <button
             type="button"
@@ -86,9 +89,6 @@ export default function ReportPreview() {
             title="Send report to patient via WhatsApp"
           >
             <MessageCircle size={15} /> Send to Patient
-          </button>
-          <button onClick={() => navigateTo('consultation')} className="btn btn-primary btn-sm">
-            <FileText size={15} /> Consult Doctor
           </button>
         </div>
       </div>
@@ -140,14 +140,6 @@ export default function ReportPreview() {
         </div>
 
         <div style={{ padding: '2rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-          {/* Medical Disclaimer Banner */}
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', padding: '0.85rem 1rem', backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 'var(--radius-md)' }}>
-            <ShieldAlert size={18} style={{ color: '#d97706', flexShrink: 0, marginTop: '2px' }} />
-            <p style={{ fontSize: '0.8rem', color: '#92400e', lineHeight: 1.5, margin: 0 }}>
-              <strong>Important Medical Disclaimer:</strong> This application is an educational AI demonstration and is not a clinically validated diagnostic system. AI predictions should not be used as a substitute for evaluation by a qualified healthcare professional.
-            </p>
-          </div>
 
           {/* 1. Patient Information (NO Patient ID) */}
           <section>
@@ -263,16 +255,16 @@ export default function ReportPreview() {
               Share Professional Report via WhatsApp
             </div>
             <div style={{ fontSize: '0.78rem', color: '#15803d', marginBottom: '1rem' }}>
-              Sends a formatted medical report with patient info, AI result, model metrics and disclaimer — directly to WhatsApp.
+              Sends a formatted medical report with patient info, AI result, and model metrics directly to WhatsApp.
             </div>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                onClick={handleSendToDoctor}
+                onClick={handleShareWhatsApp}
                 className="btn btn-sm"
                 style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,197,94,0.3)' }}
               >
-                <MessageCircle size={14} /> Send to Doctor (WhatsApp)
+                <MessageCircle size={14} /> Share via WhatsApp
               </button>
               <button
                 type="button"
@@ -293,12 +285,18 @@ export default function ReportPreview() {
               </button>
             </div>
             <div style={{ marginTop: '0.65rem', fontSize: '0.72rem', color: '#64748b' }}>
-              * Opens WhatsApp with a professional formatted report including patient details, AI result, DenseNet121 model metrics and medical disclaimer.
+              * Opens WhatsApp with a professional formatted report including patient details, AI result, and DenseNet121 model metrics.
             </div>
           </div>
 
         </div>
       </div>
+
+      <WhatsAppShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        defaultRecipient={shareRecipient}
+      />
     </>
   );
 }

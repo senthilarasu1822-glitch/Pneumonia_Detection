@@ -21,9 +21,7 @@ An educational AI platform for chest X-ray pneumonia screening using **DenseNet1
 - 🔥 **Grad-CAM** — Gradient-weighted Class Activation Mapping heatmaps
 - 📊 **Disease Spread Analysis** — Regional opacity quantification
 - 📄 **PDF Report Generation** — Clinical-grade formatted report with Grad-CAM images
-- 💬 **WhatsApp Integration** — Share reports directly with doctor/patient
-- 🎥 **WebRTC Video Consultation** — Browser-based video call with WebSocket signaling
-- 🏥 **Doctor Dashboard** — Appointment management (approve/reject/schedule)
+- 💬 **WhatsApp Integration** — Instant report sharing via WhatsApp
 
 ## Model Performance (Test Benchmark — 624 images)
 

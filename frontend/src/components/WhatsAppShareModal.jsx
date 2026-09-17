@@ -1,123 +1,156 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  ExternalLink, Copy, Check, X, Send, User, Stethoscope,
-  Globe, Smartphone, MessageCircle
+  FileText, Download, Copy, Check, X, Share2,
+  ExternalLink, MessageCircle, User, Phone,
+  Paperclip, ArrowRight, CheckCircle2, Loader2, Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-function normalizeNumber(raw) {
-  let number = String(raw || '').replace(/\D/g, '');
-  if (number.length === 10) number = '91' + number;
-  if (number.startsWith('0')) number = '91' + number.slice(1);
-  return number;
-}
-
-function openWhatsApp(raw, message, useWeb = true) {
-  const phone = normalizeNumber(raw);
-  const text = encodeURIComponent(message);
-  const url = useWeb
-    ? `https://web.whatsapp.com/send?phone=${phone}&text=${text}`
-    : `https://wa.me/${phone}?text=${text}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
-}
+import { fetchReportPdfDocument, downloadReportPdf } from '../services/reportService';
+import { buildWhatsAppReport, normalizePhone } from '../utils/whatsappReport';
 
 export default function WhatsAppShareModal({
   isOpen,
   onClose,
-  defaultRecipient = 'doctor', // 'doctor' | 'patient'
-  reportData,
-  appointmentData
+  defaultRecipient = 'patient'
 }) {
-  const { doctor, patient } = useApp();
+  const { patient, xray, analysis } = useApp();
   const [recipient, setRecipient] = useState(defaultRecipient);
   const [customPhone, setCustomPhone] = useState('');
   const [copied, setCopied] = useState(false);
+  const [loadingPdf, setLoadingPdf] = useState(false);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [pdfMeta, setPdfMeta] = useState(null);
+  const [sharedDirectly, setSharedDirectly] = useState(false);
+  const [instructionsVisible, setInstructionsVisible] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  if (!isOpen) return null;
-
-  const doctorPhone = normalizeNumber(doctor?.phone || '9786113795');
-  const patientPhone = normalizeNumber(patient?.contactNumber || '');
-  const customFormattedPhone = normalizeNumber(customPhone);
-
-  const activePhone = recipient === 'doctor' 
-    ? doctorPhone 
-    : recipient === 'patient' 
-      ? patientPhone 
-      : customFormattedPhone;
-
-  // ─── Full rich message (clipboard only — too long for a URL) ────────────────
-  let message = '';
-  if (reportData) {
-    if (recipient === 'doctor') {
-      message = `PneumoAI - Patient X-Ray Screening Report\n\nHello ${doctor?.name || 'Doctor'},\n\nPatient: ${patient?.fullName || 'N/A'} | Age: ${patient?.age || 'N/A'} | Sex: ${patient?.sex || 'N/A'}\nContact: ${patient?.contactNumber || 'N/A'}\n\nAI Result: ${reportData.prediction}\nConfidence: ${reportData.confidence}%\nModel: DenseNet121 (Threshold: 0.65)\nDate: ${reportData.analyzedAt ? new Date(reportData.analyzedAt).toLocaleDateString() : new Date().toLocaleDateString()}\n\nPlease advise on next steps.\n\nThank you,\n${patient?.fullName || 'Patient'}`;
-    } else {
-      message = `PneumoAI - Your X-Ray Report is Ready\n\nHello ${patient?.fullName || 'Patient'},\n\nAI Result: ${reportData.prediction}\nConfidence: ${reportData.confidence}%\n\nPlease consult a healthcare professional for clinical evaluation.\n\n- PneumoAI`;
+  // Reset states when opened
+  useEffect(() => {
+    if (isOpen && patient && analysis) {
+      setRecipient(defaultRecipient);
+      setSharedDirectly(false);
+      setInstructionsVisible(false);
+      setErrorMsg('');
+      preparePdfDocument();
     }
-  } else if (appointmentData) {
-    if (recipient === 'doctor') {
-      if (appointmentData.consultationType === 'online') {
-        message = `PneumoAI - I am ready for our video consultation.\n\nHello ${doctor?.name || 'Doctor'},\n\nPatient: ${patient?.fullName || 'Patient'}\nScheduled: ${appointmentData.date} at ${appointmentData.time}\n${reportData?.prediction ? `AI Screening: ${reportData.prediction} (${reportData.confidence}%)` : ''}\n\nPlease join the video room.\n\nThank you,\n${patient?.fullName || 'Patient'}`;
-      } else {
-        message = `PneumoAI - Appointment Confirmation\n\nHello ${doctor?.name || 'Doctor'},\n\nI am confirming my in-person appointment.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nClinic: ${appointmentData.clinicName || doctor?.clinic || 'N/A'}\nPatient: ${patient?.fullName || 'Patient'}\n\nThank you,\n${patient?.fullName || 'Patient'}`;
+  }, [isOpen]);
+
+  const preparePdfDocument = async () => {
+    try {
+      setLoadingPdf(true);
+      const doc = await fetchReportPdfDocument({
+        patient,
+        analysis,
+        originalImage: xray?.previewUrl
+      });
+      setPdfMeta(doc);
+      setPdfReady(true);
+    } catch (err) {
+      console.error('Failed to prepare PDF document:', err);
+      setErrorMsg('Could not pre-generate PDF. You can still open WhatsApp with the text summary.');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  if (!isOpen || !patient || !analysis) return null;
+
+  const targetPhone = recipient === 'patient' 
+    ? (patient?.contactNumber || '') 
+    : customPhone;
+
+  const { message, waMeUrl, webUrl } = buildWhatsAppReport(
+    patient,
+    analysis,
+    targetPhone,
+    pdfMeta?.directUrl || (pdfMeta ? `${window.location.origin}/reports/${pdfMeta.filename}` : null)
+  );
+
+  const handleShareDocument = async () => {
+    setErrorMsg('');
+    try {
+      let doc = pdfMeta;
+      if (!doc) {
+        setLoadingPdf(true);
+        doc = await fetchReportPdfDocument({
+          patient,
+          analysis,
+          originalImage: xray?.previewUrl
+        });
+        setPdfMeta(doc);
       }
-    } else {
-      if (appointmentData.consultationType === 'offline') {
-        message = `PneumoAI - Consultation Approved\n\nHello ${appointmentData.patient?.fullName || patient?.fullName},\n\nYour appointment with ${doctor?.name} is confirmed.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\nClinic: ${appointmentData.clinicName || doctor?.clinic || 'N/A'}\nAddress: ${appointmentData.clinicAddress || doctor?.address || 'N/A'}\n\nThank you,\nPneumoAI`;
-      } else {
-        message = `PneumoAI - Online Consultation Approved\n\nHello ${appointmentData.patient?.fullName || patient?.fullName},\n\nYour video consultation with ${doctor?.name} is confirmed.\n\nDate: ${appointmentData.date}\nTime: ${appointmentData.time}\n\nThank you,\nPneumoAI`;
+
+      // Check if browser supports sharing native files (Mobile Chrome, Safari, etc.)
+      const canShareFiles = typeof navigator !== 'undefined' && 
+        navigator.canShare && 
+        doc.file && 
+        navigator.canShare({ files: [doc.file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          files: [doc.file],
+          title: `PneumoAI Report - ${patient.fullName}`,
+          text: message
+        });
+        setSharedDirectly(true);
+        return;
       }
-    }
-  }
 
-  // ─── Short URL-safe message (<250 chars, no emojis) for WhatsApp links ───────
-  // Emojis expand to ~12 chars each when URL-encoded; long URLs break WhatsApp.
-  let shortMsg = '';
-  if (reportData) {
-    if (recipient === 'doctor') {
-      shortMsg = `PneumoAI Report - Patient: ${patient?.fullName || 'N/A'}, Result: ${reportData.prediction}, Confidence: ${reportData.confidence}%. Please advise. - ${patient?.fullName || 'Patient'}`;
-    } else {
-      shortMsg = `PneumoAI: Your X-ray result is ready. Result: ${reportData.prediction}, Confidence: ${reportData.confidence}%. Consult a doctor for clinical evaluation.`;
-    }
-  } else if (appointmentData) {
-    if (recipient === 'doctor') {
-      shortMsg = appointmentData.consultationType === 'online'
-        ? `PneumoAI: I am ready for our video consultation on ${appointmentData.date} at ${appointmentData.time}. - ${patient?.fullName || 'Patient'}`
-        : `PneumoAI: Confirming appointment on ${appointmentData.date} at ${appointmentData.time} at ${appointmentData.clinicName || 'clinic'}. - ${patient?.fullName || 'Patient'}`;
-    } else {
-      shortMsg = appointmentData.consultationType === 'offline'
-        ? `PneumoAI: Your appointment with ${doctor?.name} is confirmed for ${appointmentData.date} at ${appointmentData.time}. Clinic: ${appointmentData.clinicName || 'N/A'}.`
-        : `PneumoAI: Your online consultation with ${doctor?.name} is confirmed for ${appointmentData.date} at ${appointmentData.time}.`;
-    }
-  }
-  // Trim to 300 chars max as a safety net
-  if (shortMsg.length > 300) shortMsg = shortMsg.slice(0, 297) + '...';
+      // Fallback for Desktop: Auto-download the PDF and open WhatsApp Web with prefilled message
+      const blobUrl = URL.createObjectURL(doc.blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 
-  const handleCopy = () => {
+      // Open WhatsApp chat in new window
+      const openUrl = normalizePhone(targetPhone) ? waMeUrl : webUrl;
+      window.open(openUrl, '_blank', 'noopener,noreferrer');
+
+      // Show the guide to attach the file in WhatsApp Web
+      setInstructionsVisible(true);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Error sharing PDF document:', err);
+        setErrorMsg('Sharing document was canceled or not supported on this device. You can download the PDF directly.');
+      }
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  const handleDownloadOnly = async () => {
+    try {
+      setLoadingPdf(true);
+      await downloadReportPdf({
+        patient,
+        analysis,
+        originalImage: xray?.previewUrl
+      });
+    } catch (err) {
+      setErrorMsg(err.message || 'Download failed');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
+
+  const handleCopyMessage = () => {
     navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // Build URLs using the SHORT message so links actually work
-  const encodedShort = encodeURIComponent(shortMsg);
-  const waMeUrl = activePhone
-    ? `https://wa.me/${activePhone}?text=${encodedShort}`
-    : `https://wa.me/?text=${encodedShort}`;
-  const webUrl = activePhone
-    ? `https://web.whatsapp.com/send?phone=${activePhone}&text=${encodedShort}`
-    : `https://web.whatsapp.com/send?text=${encodedShort}`;
-  const apiUrl = activePhone
-    ? `https://api.whatsapp.com/send?phone=${activePhone}&text=${encodedShort}`
-    : `https://api.whatsapp.com/send?text=${encodedShort}`;
-
   return (
-
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        zIndex: 110,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 120,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -135,138 +168,263 @@ export default function WhatsAppShareModal({
           backgroundColor: '#ffffff',
           borderRadius: 'var(--radius-xl)',
           padding: '2rem',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
           maxHeight: '92vh',
           overflowY: 'auto'
         }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div
               style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '10px',
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
                 backgroundColor: '#dcfce7',
                 color: '#16a34a',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexShrink: 0
               }}
             >
-              <MessageCircle size={22} />
+              <MessageCircle size={24} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--navy-900)' }}>
-                Send Report in WhatsApp
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--navy-900)', fontWeight: 700 }}>
+                Send Report as PDF Document
               </h3>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Connect directly via WhatsApp Web (Browser) or Mobile App
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Share official PDF report directly to WhatsApp
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', borderRadius: '6px' }}
             aria-label="Close"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Recipient Selection Toggle */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            Select Recipient:
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-            <button
-              type="button"
-              onClick={() => setRecipient('doctor')}
-              className={`btn btn-sm ${recipient === 'doctor' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '0.65rem 0.8rem', justifyContent: 'flex-start', border: recipient === 'doctor' ? 'none' : '1px solid var(--border-light)' }}
-            >
-              <Stethoscope size={16} style={{ flexShrink: 0 }} />
-              <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Doctor (Dr. Sarah)</div>
-                <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>+91 {doctor?.phone || '9786113795'}</div>
-              </div>
-            </button>
+        {/* PDF Document Preview Card */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            padding: '1rem 1.2rem',
+            backgroundColor: '#f8fafc',
+            border: '1.5px solid #e2e8f0',
+            borderRadius: 'var(--radius-lg)',
+            marginBottom: '1.25rem'
+          }}
+        >
+          <div
+            style={{
+              width: '46px',
+              height: '52px',
+              backgroundColor: '#fee2e2',
+              border: '1px solid #fca5a5',
+              borderRadius: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#dc2626',
+              flexShrink: 0
+            }}
+          >
+            <FileText size={22} />
+            <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', marginTop: '2px' }}>PDF</span>
+          </div>
 
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--navy-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pdfMeta?.filename || `pneumoai-report-${(patient.fullName || 'patient').toLowerCase()}.pdf`}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+              Patient: <strong>{patient.fullName}</strong> • {analysis.prediction === 'PNEUMONIA' ? '🔴 Pneumonia' : '🟢 Normal'} ({analysis.confidence}%)
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 600, marginTop: '2px' }}>
+              {loadingPdf ? '⏳ Compiling diagnostic PDF with Grad-CAM images...' : '✓ Official PDF Document Ready'}
+            </div>
+          </div>
+        </div>
+
+        {/* Recipient Selector */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>
+            Send WhatsApp To:
+          </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.75rem' }}>
             <button
               type="button"
               onClick={() => setRecipient('patient')}
               className={`btn btn-sm ${recipient === 'patient' ? 'btn-primary' : 'btn-secondary'}`}
               style={{ padding: '0.65rem 0.8rem', justifyContent: 'flex-start', border: recipient === 'patient' ? 'none' : '1px solid var(--border-light)' }}
             >
-              <User size={16} style={{ flexShrink: 0 }} />
+              <User size={15} style={{ flexShrink: 0 }} />
               <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Patient (Self)</div>
-                <div style={{ fontSize: '0.72rem', opacity: 0.85 }}>{patient?.contactNumber || 'Patient Contact'}</div>
+                <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>Patient Contact</div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.85 }}>{patient?.contactNumber || 'No number'}</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRecipient('custom')}
+              className={`btn btn-sm ${recipient === 'custom' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '0.65rem 0.8rem', justifyContent: 'flex-start', border: recipient === 'custom' ? 'none' : '1px solid var(--border-light)' }}
+            >
+              <Phone size={15} style={{ flexShrink: 0 }} />
+              <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>Custom Number</div>
+                <div style={{ fontSize: '0.7rem', opacity: 0.85 }}>Enter recipient phone</div>
               </div>
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setRecipient('custom')}
-              style={{
-                fontSize: '0.75rem',
-                color: recipient === 'custom' ? 'var(--primary)' : 'var(--text-muted)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: recipient === 'custom' ? 700 : 500,
-                textDecoration: 'underline'
-              }}
-            >
-              Or enter custom WhatsApp number
-            </button>
-            {recipient === 'custom' && (
+          {recipient === 'custom' && (
+            <div style={{ marginTop: '0.5rem' }}>
               <input
                 type="text"
-                placeholder="e.g. 9786113795"
+                placeholder="Enter 10-digit number or international format (e.g. 9876543210)"
                 value={customPhone}
                 onChange={(e) => setCustomPhone(e.target.value)}
                 style={{
-                  flex: 1,
-                  padding: '0.35rem 0.6rem',
-                  fontSize: '0.8rem',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-light)'
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-light)',
+                  outline: 'none'
                 }}
               />
+            </div>
+          )}
+        </div>
+
+        {/* Primary Action Button */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.25rem' }}>
+          <button
+            type="button"
+            onClick={handleShareDocument}
+            disabled={loadingPdf}
+            className="btn"
+            style={{
+              backgroundColor: '#22c55e',
+              color: '#ffffff',
+              border: 'none',
+              padding: '0.9rem 1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem',
+              fontSize: '0.98rem',
+              fontWeight: 700,
+              borderRadius: 'var(--radius-md)',
+              boxShadow: '0 4px 14px rgba(34, 197, 94, 0.35)',
+              cursor: loadingPdf ? 'wait' : 'pointer'
+            }}
+          >
+            {loadingPdf ? (
+              <>
+                <Loader2 size={18} className="spin" />
+                <span>Preparing PDF Document...</span>
+              </>
+            ) : (
+              <>
+                <MessageCircle size={20} />
+                <span>Send PDF Document to WhatsApp</span>
+              </>
             )}
+          </button>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+            <button
+              type="button"
+              onClick={handleDownloadOnly}
+              disabled={loadingPdf}
+              className="btn btn-secondary btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                padding: '0.6rem',
+                fontWeight: 600,
+                fontSize: '0.82rem'
+              }}
+            >
+              <Download size={15} />
+              <span>Download PDF File</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyMessage}
+              className="btn btn-secondary btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                padding: '0.6rem',
+                fontWeight: 600,
+                fontSize: '0.82rem'
+              }}
+            >
+              {copied ? <Check size={15} style={{ color: '#16a34a' }} /> : <Copy size={15} />}
+              <span>{copied ? 'Copied with Link!' : 'Copy Text & Link'}</span>
+            </button>
           </div>
         </div>
 
-        {/* Message Preview Box */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Pre-filled Message Preview:
+        {/* Guided Step Banner (Shows on Desktop after triggering) */}
+        {instructionsVisible && (
+          <div
+            style={{
+              padding: '1rem 1.2rem',
+              backgroundColor: '#eff6ff',
+              border: '1.5px solid #bfdbfe',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '1.25rem',
+              animation: 'fadeIn 0.2s ease-in-out'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#1d4ed8', fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.4rem' }}>
+              <CheckCircle2 size={18} />
+              <span>PDF Downloaded & WhatsApp Web Opened!</span>
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#1e40af', lineHeight: 1.5 }}>
+              To attach the document in your opened WhatsApp chat:
+              <ol style={{ margin: '0.4rem 0 0.2rem 1.2rem', padding: 0 }}>
+                <li>Click the <strong>📎 Paperclip / Attach</strong> icon in WhatsApp.</li>
+                <li>Select <strong>Document</strong>.</li>
+                <li>Choose the downloaded PDF: <code>{pdfMeta?.filename}</code>.</li>
+                <li>Hit <strong>Send</strong>!</li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="form-error-msg" style={{ display: 'block', marginBottom: '1rem', padding: '0.65rem 0.85rem' }}>
+            {errorMsg}
+          </div>
+        )}
+
+        {/* Message & Document Link Preview */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              WhatsApp Message Preview (with PDF Document Link):
             </span>
-            <button
-              type="button"
-              onClick={handleCopy}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: copied ? '#16a34a' : 'var(--cyan-700)',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.3rem'
-              }}
-            >
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-              <span>{copied ? 'Copied to Clipboard!' : 'Copy Text'}</span>
-            </button>
           </div>
 
           <div
@@ -274,107 +432,19 @@ export default function WhatsAppShareModal({
               backgroundColor: '#f8fafc',
               border: '1px solid #e2e8f0',
               borderRadius: 'var(--radius-md)',
-              padding: '0.85rem 1rem',
-              fontSize: '0.78rem',
+              padding: '0.85rem',
+              fontSize: '0.75rem',
               color: '#334155',
               whiteSpace: 'pre-wrap',
-              maxHeight: '150px',
+              maxHeight: '120px',
               overflowY: 'auto',
               fontFamily: 'monospace',
-              lineHeight: 1.5
+              lineHeight: 1.45
             }}
           >
             {message}
           </div>
         </div>
-
-        {/* Connection Options — window.open() used instead of <a target="_blank">
-          to avoid browser popup-blocker on modals */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-          {/* Primary: wa.me — most reliable on mobile & desktop */}
-          <button
-            type="button"
-            onClick={() => window.open(waMeUrl, '_blank', 'noopener,noreferrer')}
-            className="btn"
-            style={{
-              backgroundColor: '#22c55e',
-              color: '#ffffff',
-              border: 'none',
-              padding: '0.85rem 1.25rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.6rem',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              borderRadius: 'var(--radius-md)',
-              boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
-              cursor: 'pointer'
-            }}
-          >
-            <Globe size={18} />
-            <span>Open WhatsApp (wa.me — Recommended)</span>
-          </button>
-
-          {/* Secondary: WhatsApp Web Browser */}
-          <button
-            type="button"
-            onClick={() => window.open(webUrl, '_blank', 'noopener,noreferrer')}
-            className="btn btn-secondary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.6rem',
-              padding: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            <Smartphone size={16} />
-            <span>Open in WhatsApp Web (Browser)</span>
-          </button>
-
-          {/* Tertiary: Universal API (desktop app) */}
-          <button
-            type="button"
-            onClick={() => window.open(apiUrl, '_blank', 'noopener,noreferrer')}
-            className="btn btn-secondary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.6rem',
-              padding: '0.75rem',
-              fontWeight: 600,
-              fontSize: '0.82rem',
-              cursor: 'pointer'
-            }}
-          >
-            <Smartphone size={14} />
-            <span>Open in WhatsApp Desktop App</span>
-          </button>
-
-          {/* Copy button fallback */}
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="btn btn-secondary btn-sm"
-            style={{
-              color: 'var(--text-muted)',
-              fontSize: '0.78rem',
-              padding: '0.45rem'
-            }}
-          >
-            <Copy size={13} />
-            <span>{copied ? 'Copied to Clipboard!' : 'Copy Pre-Filled Text'}</span>
-          </button>
-        </div>
-
-        <p style={{ margin: '1rem 0 0', fontSize: '0.73rem', color: '#64748b', textAlign: 'center', lineHeight: 1.45 }}>
-          💡 <strong>How it works:</strong> The WhatsApp buttons open with a <strong>short summary message</strong> (to ensure the link works on all devices). Use <strong>"Copy Pre-Filled Text"</strong> to get the full detailed message and paste it manually in WhatsApp.
-        </p>
       </div>
     </div>
   );

@@ -2,8 +2,8 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import Logo from './Logo';
 import {
-  LayoutDashboard, Upload, FileText, Stethoscope, LogOut,
-  User, Home, Shield
+  LayoutDashboard, Upload, FileText, LogOut,
+  User, Home
 } from 'lucide-react';
 
 export default function Header() {
@@ -95,29 +95,8 @@ export default function Header() {
                 </button>
               )}
 
-              <button
-                onClick={() => navigateTo('consultation')}
-                className={`btn btn-sm ${activePage === 'consultation' || activePage === 'videocall' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ padding: '0.45rem 0.85rem' }}
-              >
-                <Stethoscope size={15} />
-                <span className="nav-label">Consultation</span>
-              </button>
             </>
           )}
-
-          {/* Doctor Portal Quick Switch */}
-          <button
-            onClick={() => navigateTo('doctor-dashboard')}
-            className={`btn btn-sm ${activePage === 'doctor-dashboard' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{
-              padding: '0.45rem 0.85rem',
-              border: activePage === 'doctor-dashboard' ? 'none' : '1px solid #cbd5e1'
-            }}
-          >
-            <Shield size={14} />
-            <span className="nav-label">Doctor Portal</span>
-          </button>
         </nav>
 
         {/* Right: Active Patient Profile Badge & Logout */}

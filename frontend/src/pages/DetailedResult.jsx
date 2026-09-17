@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import ResultCard from '../components/ResultCard';
 import ConfidenceCard from '../components/ConfidenceCard';
 import XRayViewer from '../components/XRayViewer';
-import Disclaimer from '../components/Disclaimer';
 import StepIndicator from '../components/StepIndicator';
-import { ArrowLeft, FileText, Stethoscope, RefreshCw, Activity, MapPin, Target, AlertTriangle } from 'lucide-react';
+import WhatsAppShareModal from '../components/WhatsAppShareModal';
+import { ArrowLeft, FileText, RefreshCw, Activity, MapPin, Target, AlertTriangle, MessageCircle } from 'lucide-react';
 
 export default function DetailedResult() {
   const { analysis, xray, navigateTo } = useApp();
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   if (!analysis) {
     return (
@@ -49,13 +50,19 @@ export default function DetailedResult() {
             <RefreshCw size={15} />
             New Scan
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => navigateTo('report')}>
+          <button className="btn btn-accent btn-sm" onClick={() => navigateTo('report')}>
             <FileText size={15} />
             View Report
           </button>
-          <button className="btn btn-accent btn-sm" onClick={() => navigateTo('consultation')}>
-            <Stethoscope size={15} />
-            Consult Doctor
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ backgroundColor: '#22c55e', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, cursor: 'pointer' }}
+            onClick={() => setShareModalOpen(true)}
+            title="Send full PDF report via WhatsApp"
+          >
+            <MessageCircle size={15} />
+            Send on WhatsApp
           </button>
         </div>
       </div>
@@ -210,11 +217,11 @@ export default function DetailedResult() {
         )}
       </div>
 
-      {/* Clinical Disclaimer */}
-      <div className="card" style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
-        <strong style={{ color: 'var(--navy-900)' }}>AI Attention & Spread Visualization:</strong> highlighted regions and bounding boxes represent localized high-attention neural features calculated via Grad-CAM activation maps. They provide educational spatial insights and do not replace professional radiological evaluation.
-      </div>
-      <Disclaimer variant="card" />
+      <WhatsAppShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        defaultRecipient="patient"
+      />
     </div>
   );
 }

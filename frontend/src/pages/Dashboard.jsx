@@ -1,17 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
 import PatientCard from '../components/PatientCard';
-import Disclaimer from '../components/Disclaimer';
-import WhatsAppShareModal from '../components/WhatsAppShareModal';
 import {
-  Upload, FileText, Stethoscope, Activity, Cpu, Clock,
-  TrendingUp, AlertCircle, CheckCircle2, BarChart2, ArrowRight,
-  Video, Building, ExternalLink, MessageCircle
+  Upload, FileText, Activity, Cpu, Clock,
+  TrendingUp, AlertCircle, CheckCircle2, BarChart2, ArrowRight
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { patient, history, analysis, appointment, navigateTo, doctor } = useApp();
-  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
+  const { patient, history, analysis, navigateTo } = useApp();
 
   const totalScans = history.length;
   const pneumoniaCount = history.filter(h => h.prediction === 'PNEUMONIA').length;
@@ -37,15 +33,6 @@ export default function Dashboard() {
       bg: '#f5f3ff',
       border: '#ddd6fe',
       disabled: !analysis
-    },
-    {
-      icon: Stethoscope,
-      label: 'Doctor Consultation',
-      sub: `Connect with ${doctor.name} (${doctor.phone})`,
-      page: 'consultation',
-      color: '#059669',
-      bg: '#ecfdf5',
-      border: '#a7f3d0'
     }
   ];
 
@@ -82,68 +69,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Active Consultation Status Banner */}
-      {appointment && (
-        <div
-          className="card"
-          style={{
-            padding: '1.25rem 1.5rem',
-            borderLeft: `4px solid ${appointment.status === 'approved' ? '#10b981' : appointment.status === 'rejected' ? '#ef4444' : '#f59e0b'}`,
-            backgroundColor: '#ffffff'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-                  Active Consultation Request
-                </span>
-                <span className={`badge ${appointment.status === 'approved' ? 'badge-normal' : appointment.status === 'rejected' ? 'badge-suspected' : 'badge-uncertain'}`}>
-                  {appointment.status === 'pending' ? 'PENDING APPROVAL' : appointment.status.toUpperCase()}
-                </span>
-              </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--navy-900)' }}>
-                {appointment.consultationType.toUpperCase()} Consultation with {appointment.doctor?.name || doctor?.name}
-              </div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                Scheduled: {appointment.date} at {appointment.time}
-                {appointment.consultationType === 'offline' && appointment.clinicName && ` • ${appointment.clinicName}`}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              {/* ONLINE + APPROVED: Video Call Enabled + WhatsApp */}
-              {appointment.status === 'approved' && appointment.consultationType === 'online' && (
-                <>
-                  <button className="btn btn-accent btn-sm" onClick={() => navigateTo('videocall')}>
-                    <Video size={15} /> Join Video Call
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => setIsWhatsAppOpen(true)}
-                    style={{ backgroundColor: '#22c55e', color: '#ffffff', border: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 600 }}
-                    title="Connect with Doctor on WhatsApp"
-                  >
-                    <MessageCircle size={14} /> WhatsApp Doctor
-                  </button>
-                </>
-              )}
-
-              {/* OFFLINE + APPROVED: View Clinic Details */}
-              {appointment.status === 'approved' && appointment.consultationType === 'offline' && (
-                <button className="btn btn-secondary btn-sm" onClick={() => navigateTo('consultation')}>
-                  <Building size={15} /> View Clinic Details
-                </button>
-              )}
-
-              <button className="btn btn-secondary btn-sm" onClick={() => navigateTo('consultation')}>
-                Manage Appointment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Quick Actions */}
       <div>
@@ -251,7 +176,7 @@ export default function Dashboard() {
           <Cpu size={20} style={{ color: '#38bdf8' }} />
           <span style={{ fontWeight: 700, fontSize: '1rem' }}>DenseNet121 Model Architecture Reference</span>
           <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: '#64748b', backgroundColor: 'rgba(14,165,233,0.15)', padding: '0.2rem 0.6rem', borderRadius: '4px', border: '1px solid rgba(14,165,233,0.25)' }}>
-            Educational Prototype
+            DenseNet121 v1.0
           </span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
@@ -268,17 +193,6 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
-
-      <Disclaimer variant="card" />
-
-      {/* WhatsApp Connect Modal */}
-      <WhatsAppShareModal
-        isOpen={isWhatsAppOpen}
-        onClose={() => setIsWhatsAppOpen(false)}
-        defaultRecipient="doctor"
-        appointmentData={appointment}
-        reportData={analysis ? { prediction: analysis.prediction, confidence: analysis.confidence, analyzedAt: analysis.analyzedAt } : null}
-      />
     </div>
   );
 }
