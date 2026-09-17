@@ -1,0 +1,44 @@
+name: Deploy Backend to Oracle Cloud VM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app.py"
+      - "gradcam.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".github/workflows/deploy-backend.yml"
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Oracle VM via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          # Set these secrets in GitHub → Settings → Secrets → Actions
+          host: ${{ secrets.ORACLE_VM_HOST }}
+          username: ${{ secrets.ORACLE_VM_USER }}
+          key: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/Pneumonia_Detection
+
+            # Pull latest changes
+            git pull origin main
+
+            # Rebuild and restart the container (zero-downtime via --no-deps)
+            docker compose pull || true
+            docker compose up -d --build --no-deps pneumoai
+
+            # Verify health
+            sleep 15
+            curl -sf http://localhost:8000/health || exit 1
+            echo "✅ Backend deployed successfully!"

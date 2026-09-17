@@ -162,6 +162,12 @@ def root():
     }
 
 
+@app.get("/health")
+def health():
+    """Lightweight health check used by Docker HEALTHCHECK and monitoring."""
+    return {"status": "ok", "app": "PneumoAI"}
+
+
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     if not file or not file.filename:

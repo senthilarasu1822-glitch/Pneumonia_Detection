@@ -35,9 +35,13 @@ COPY appointments.json .
 # Copy built frontend from Stage 1
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 
-# Hugging Face Spaces requires port 7860
-ENV PORT=7860
-EXPOSE 7860
+# Oracle Cloud deployment — standard port 8000
+ENV PORT=8000
+EXPOSE 8000
 
-# Run FastAPI (it will serve both the React SPA and API endpoints)
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Health check so Docker / orchestrators know when the container is ready
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Run FastAPI (serves both the React SPA and API endpoints)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
