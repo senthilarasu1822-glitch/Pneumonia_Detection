@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent
 MODEL_PATH = ROOT / "model" / "pneumonia_densenet121.keras"
 ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "application/octet-stream"}
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-REPORTS_DIR = ROOT / "static" / "reports"
+REPORTS_DIR = Path("/tmp/pneumonia_reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="PneumoAI API", description="AI-Assisted Pneumonia Detection & Screening Platform")
